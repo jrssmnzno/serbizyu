@@ -4,58 +4,164 @@ namespace App\Domains\Admin\Services;
 
 use App\Domains\Users\Models\User;
 use App\Domains\Orders\Models\Order;
+use App\Domains\Listings\Models\Service;
+use App\Domains\Admin\Models\PlatformStat;
+use Carbon\Carbon;
 
 class DashboardService
 {
     /**
-     * Get platform statistics.
-     *
-     * @return array
+     * Get today's platform statistics
      */
-    public function getStats(): array
+    public function getTodayStats()
+    {
+        return PlatformStat::where('date', today())->first() ?? $this->generateDailyStats(today());
+    }
+
+    /**
+     * Get this week's platform statistics
+     */
+    public function getWeeklyStats()
+    {
+        return PlatformStat::whereBetween('date', [
+            now()->startOfWeek(),
+            now()->endOfWeek()
+        ])->get();
+    }
+
+    /**
+     * Get this month's platform statistics
+     */
+    public function getMonthlyStats()
+    {
+        return PlatformStat::whereBetween('date', [
+            now()->startOfMonth(),
+            now()->endOfMonth()
+        ])->get();
+    }
+
+    /**
+     * Generate daily statistics for a given date
+     */
+    public function generateDailyStats($date)
+    {
+        $date = Carbon::parse($date)->startOfDay();
+
+        $stat = PlatformStat::firstOrCreate(['date' => $date->format('Y-m-d')], [
+            'total_users' => User::count(),
+            'active_users' => User::where('last_seen_at', '>=', $date)->count(),
+            'new_users' => User::whereDate('created_at', $date)->count(),
+            'total_listings' => Service::count(),
+            'active_listings' => Service::where('status', 'active')->count(),
+            'total_orders' => Order::count(),
+            'completed_orders' => Order::where('status', 'completed')->count(),
+            'total_revenue' => Order::where('payment_status', 'paid')->sum('total_amount'),
+            'platform_fees_collected' => Order::where('payment_status', 'paid')->sum('total_amount') * 0.05,
+            'average_order_value' => Order::where('payment_status', 'paid')->avg('total_amount') ?? 0,
+        ]);
+
+        return $stat;
+    }
+
+    /**
+     * Get top performing sellers
+     */
+    public function getTopPerformers($limit = 5)
+    {
+        return User::withCount(['ordersAsSeller' => fn($q) => $q->where('status', 'completed')])
+            ->orderBy('orders_as_seller_count', 'desc')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Get recent orders
+     */
+    public function getRecentOrders($limit = 5)
+    {
+        return Order::with(['buyer', 'seller'])
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Get order metrics
+     */
+    public function getOrderMetrics()
     {
         return [
-            'total_users' => $this->getTotalUsers(),
-            'total_orders' => $this->getTotalOrders(),
-            'total_revenue' => $this->getTotalRevenue(),
+            'pending' => Order::where('status', 'pending')->count(),
+            'in_progress' => Order::where('status', 'in_progress')->count(),
+            'completed' => Order::where('status', 'completed')->count(),
+            'cancelled' => Order::where('status', 'cancelled')->count(),
+            'paid' => Order::where('payment_status', 'paid')->count(),
+            'unpaid' => Order::where('payment_status', '!=', 'paid')->count(),
         ];
     }
 
     /**
-     * Get the total number of users.
-     *
-     * @return int
+     * Get user metrics
      */
-    protected function getTotalUsers(): int
+    public function getUserMetrics()
     {
-        return User::count();
+        return [
+            'total_users' => User::count(),
+            'active_users' => User::where('last_seen_at', '>=', now()->subDays(7))->count(),
+            'sellers' => User::role('seller')->count(),
+            'buyers' => User::role('buyer')->count(),
+            'suspended' => User::whereNotNull('suspended_until')->where('suspended_until', '>', now())->count(),
+        ];
     }
 
     /**
-     * Get the total number of orders.
-     *
-     * @return int
+     * Get listing metrics
      */
-    protected function getTotalOrders(): int
+    public function getListingMetrics()
     {
-        return Order::count();
+        return [
+            'total_listings' => Service::count(),
+            'active_listings' => Service::where('status', 'active')->count(),
+            'inactive_listings' => Service::where('status', 'inactive')->count(),
+            'avg_price' => Service::avg('price') ?? 0,
+        ];
     }
 
     /**
-     * Get the total revenue.
-     *
-     * @return float
+     * Get revenue metrics
      */
-    protected function getTotalRevenue(): float
+    public function getRevenueMetrics()
     {
-        // Assuming 'total_amount' is the column that stores the order's total amount
-        return Order::where('payment_status', 'paid')->sum('total_amount');
+        $paidOrders = Order::where('payment_status', 'paid');
+        $totalGMV = $paidOrders->sum('total_amount');
+        $platformFees = $totalGMV * 0.05;
+
+        return [
+            'total_gmv' => $totalGMV,
+            'total_platform_fees' => $platformFees,
+            'total_seller_earnings' => $totalGMV - $platformFees,
+            'average_order_value' => $paidOrders->avg('total_amount') ?? 0,
+        ];
     }
 
     /**
-     * Get data for charts.
-     *
-     * @return array
+     * Get complete dashboard overview
+     */
+    public function getDashboardOverview()
+    {
+        return [
+            'today_stats' => $this->getTodayStats(),
+            'user_metrics' => $this->getUserMetrics(),
+            'order_metrics' => $this->getOrderMetrics(),
+            'listing_metrics' => $this->getListingMetrics(),
+            'revenue_metrics' => $this->getRevenueMetrics(),
+            'top_performers' => $this->getTopPerformers(),
+            'recent_orders' => $this->getRecentOrders(),
+        ];
+    }
+
+    /**
+     * Get data for charts
      */
     public function getChartData(): array
     {

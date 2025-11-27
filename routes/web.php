@@ -5,6 +5,7 @@ use App\Domains\Users\Http\Controllers\ProfileController;
 use App\Domains\Users\Http\Controllers\UserVerificationController;
 use App\Domains\Users\Http\Controllers\Admin\UserVerificationController as AdminUserVerificationController;
 use App\Domains\Admin\Http\Controllers\DashboardController;
+use App\Domains\Admin\Http\Controllers\AdminDashboardController;
 use App\Domains\Admin\Http\Controllers\ActivityLogController;
 use App\Domains\Admin\Http\Controllers\UserManagementController;
 use App\Domains\Admin\Http\Controllers\ListingManagementController;
@@ -93,12 +94,31 @@ Route::middleware(['auth'])->prefix('verification')->name('verification.')->grou
 // Admin Routes
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/analytics', [AdminDashboardController::class, 'analytics'])->name('analytics');
+    Route::get('/financial-reports', [AdminDashboardController::class, 'financialReports'])->name('financial-reports');
+    Route::post('/financial-reports/generate', [AdminDashboardController::class, 'generateFinancialReport'])->name('financial-reports.generate');
+    Route::get('/financial-reports/{report}/export', [AdminDashboardController::class, 'exportFinancialReport'])->name('financial-reports.export');
+    
+    Route::get('/users', [AdminDashboardController::class, 'userManagement'])->name('users');
+    Route::get('/users/{user}', [AdminDashboardController::class, 'userDetails'])->name('users.show');
+    Route::post('/users/{user}/suspend', [AdminDashboardController::class, 'suspendUser'])->name('users.suspend');
+    Route::post('/users/{user}/unsuspend', [AdminDashboardController::class, 'unsuspendUser'])->name('users.unsuspend');
+    
+    Route::get('/disputes', [AdminDashboardController::class, 'disputeResolution'])->name('disputes');
+    Route::get('/disputes/{report}', [AdminDashboardController::class, 'reportDetails'])->name('disputes.show');
+    Route::post('/disputes/{report}/resolve', [AdminDashboardController::class, 'resolveReport'])->name('disputes.resolve');
+    Route::post('/disputes/{report}/dismiss', [AdminDashboardController::class, 'dismissReport'])->name('disputes.dismiss');
+    
+    Route::get('/listings', [AdminDashboardController::class, 'listingManagement'])->name('listings');
+    Route::post('/listings/{listing}/deactivate', [AdminDashboardController::class, 'deactivateListing'])->name('listings.deactivate');
+    Route::post('/listings/{listing}/reactivate', [AdminDashboardController::class, 'reactivateListing'])->name('listings.reactivate');
+    
     Route::get('/verifications', [AdminUserVerificationController::class, 'index'])->name('verifications.index');
     Route::get('/verifications/{verification}', [AdminUserVerificationController::class, 'show'])->name('verifications.show');
     Route::post('/verifications/{verification}/approve', [AdminUserVerificationController::class, 'approve'])->name('verifications.approve');
     Route::post('/verifications/{verification}/reject', [AdminUserVerificationController::class, 'reject'])->name('verifications.reject');
-    Route::resource('users', UserManagementController::class)->except(['create', 'store']);
-    Route::resource('listings', ListingManagementController::class)->except(['create', 'store']);
+    Route::resource('users-legacy', UserManagementController::class)->except(['create', 'store']);
+    Route::resource('listings-legacy', ListingManagementController::class)->except(['create', 'store']);
     Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');
     Route::put('settings', [SettingsController::class, 'update'])->name('settings.update');
     Route::get('activity-logs', [ActivityLogController::class, 'index'])->name('activity-logs.index');

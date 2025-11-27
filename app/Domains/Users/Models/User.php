@@ -98,4 +98,20 @@ class User extends Authenticatable implements MustVerifyEmail, MediableInterface
     {
         return $this->hasMany(\App\Domains\Orders\Models\Order::class, 'buyer_id');
     }
+
+    /**
+     * Reports filed against this user
+     */
+    public function reports()
+    {
+        return $this->hasMany(\App\Domains\Admin\Models\UserReport::class, 'reported_user_id');
+    }
+
+    /**
+     * Reports filed by this user
+     */
+    public function reportedByUsers()
+    {
+        return $this->hasMany(\App\Domains\Admin\Models\UserReport::class, 'reporter_id');
+    }
 }
